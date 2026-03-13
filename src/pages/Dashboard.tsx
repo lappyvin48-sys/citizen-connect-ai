@@ -1,70 +1,264 @@
-import { FileText, Clock, CheckCircle, AlertTriangle, TrendingUp, Star, ShieldAlert } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import StatsCard from '@/components/StatsCard';
-import ComplaintCard from '@/components/ComplaintCard';
-import { dashboardStats, mockComplaints, categoryDistribution, weeklyTrend } from '@/lib/mockData';
+import { useEffect, useState } from "react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
-const Dashboard = () => (
-  <div className="mx-auto max-w-7xl px-4 py-8">
-    <div className="mb-8">
-      <h1 className="font-display text-2xl font-bold text-foreground">Dashboard</h1>
-      <p className="text-sm text-muted-foreground">Overview of grievance resolution metrics</p>
-    </div>
+import {
+Chart as ChartJS,
+CategoryScale,
+LinearScale,
+BarElement,
+ArcElement,
+Tooltip,
+Legend
+} from "chart.js";
 
-    {/* Stats */}
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <StatsCard title="Total Complaints" value={dashboardStats.total} icon={FileText} trend="+12% this week" />
-      <StatsCard title="Open" value={dashboardStats.open} icon={Clock} variant="accent" />
-      <StatsCard title="Resolved" value={dashboardStats.resolved} icon={CheckCircle} variant="success" trend="↑ 8%" />
-      <StatsCard title="Escalated" value={dashboardStats.escalated} icon={AlertTriangle} variant="urgent" />
-    </div>
+import { Bar, Pie } from "react-chartjs-2";
 
-    <div className="mt-4 grid gap-4 sm:grid-cols-3">
-      <StatsCard title="Avg Resolution" value={`${dashboardStats.avgResolutionDays} days`} icon={TrendingUp} />
-      <StatsCard title="Satisfaction" value={`${dashboardStats.satisfactionRate}%`} icon={Star} variant="accent" />
-      <StatsCard title="Corruption Flags" value={dashboardStats.corruptionFlags} icon={ShieldAlert} variant="urgent" />
-    </div>
-
-    {/* Charts */}
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-        <h3 className="font-display text-sm font-semibold text-card-foreground">Weekly Trend</h3>
-        <div className="mt-4 h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={weeklyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,15%,88%)" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="complaints" fill="hsl(38,92%,50%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="resolved" fill="hsl(152,60%,40%)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-        <h3 className="font-display text-sm font-semibold text-card-foreground">By Category</h3>
-        <div className="mt-4 h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={categoryDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {categoryDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-
-    {/* Recent */}
-    <div className="mt-8">
-      <h2 className="font-display text-lg font-semibold text-foreground">Recent Complaints</h2>
-      <div className="mt-4 space-y-3">
-        {mockComplaints.map(c => <ComplaintCard key={c.id} complaint={c} />)}
-      </div>
-    </div>
-  </div>
+ChartJS.register(
+CategoryScale,
+LinearScale,
+BarElement,
+ArcElement,
+Tooltip,
+Legend
 );
 
-export default Dashboard;
+export default function Dashboard() {
+
+const [complaints, setComplaints] = useState<any[]>([]);
+const navigate = useNavigate();
+
+useEffect(() => {
+fetchComplaints();
+}, []);
+
+async function fetchComplaints() {
+
+const { data, error } = await supabase
+.from("complaints")
+.select("*")
+.order("created_at", { ascending: false });
+
+if (!error && data) {
+setComplaints(data);
+}
+
+}
+
+/* STATS */
+
+const total = complaints.length;
+
+const resolved = complaints.filter(
+c => c.status === "Resolved"
+).length;
+
+const pending = complaints.filter(
+c => c.status === "Pending"
+).length;
+
+const urgent = complaints.filter(
+c => c.urgency === "High"
+).length;
+
+
+/* CATEGORY ANALYSIS */
+
+const categoryMap:any = {};
+
+complaints.forEach(c => {
+
+if (!categoryMap[c.category]) {
+categoryMap[c.category] = 0;
+}
+
+categoryMap[c.category]++;
+
+});
+
+const categoryChart = {
+labels: Object.keys(categoryMap),
+datasets: [
+{
+label: "Complaints by Category",
+data: Object.values(categoryMap),
+backgroundColor: "#f59e0b"
+}
+]
+};
+
+
+/* DEPARTMENT ANALYSIS */
+
+const deptMap:any = {};
+
+complaints.forEach(c => {
+
+if (!deptMap[c.department]) {
+deptMap[c.department] = 0;
+}
+
+deptMap[c.department]++;
+
+});
+
+const deptChart = {
+labels: Object.keys(deptMap),
+datasets: [
+{
+label: "Department Load",
+data: Object.values(deptMap),
+backgroundColor: "#3b82f6"
+}
+]
+};
+
+
+/* STATUS PIE */
+
+const statusChart = {
+labels: ["Resolved", "Pending"],
+datasets: [
+{
+data: [resolved, pending],
+backgroundColor: ["#22c55e", "#ef4444"]
+}
+]
+};
+
+
+return (
+
+<div className="p-10">
+
+<h1 className="text-3xl font-bold mb-8">
+Government Complaint Analytics Dashboard
+</h1>
+
+<button
+onClick={() => navigate("/assistant")}
+className="bg-purple-600 text-white px-4 py-2 rounded mb-6"
+>
+Open AI Assistant
+</button>
+
+<button
+onClick={() => navigate("/map")}
+className="bg-blue-600 text-white px-4 py-2 rounded mt-4 mb-6"
+>
+View Complaint Map
+</button>
+
+
+{/* STATS */}
+
+<div className="grid grid-cols-4 gap-6 mb-10">
+
+<div className="bg-white shadow p-6 rounded text-center">
+<h2 className="text-3xl font-bold">{total}</h2>
+<p>Total Complaints</p>
+</div>
+
+<div className="bg-white shadow p-6 rounded text-center">
+<h2 className="text-3xl font-bold">{resolved}</h2>
+<p>Resolved</p>
+</div>
+
+<div className="bg-white shadow p-6 rounded text-center">
+<h2 className="text-3xl font-bold">{pending}</h2>
+<p>Pending</p>
+</div>
+
+<div className="bg-white shadow p-6 rounded text-center">
+<h2 className="text-3xl font-bold">{urgent}</h2>
+<p>Urgent</p>
+</div>
+
+</div>
+
+
+{/* CHARTS */}
+
+<div className="grid grid-cols-2 gap-10 mb-10">
+
+<div className="bg-white p-6 shadow rounded">
+<h2 className="text-xl font-bold mb-4">
+Complaints by Category
+</h2>
+<Bar data={categoryChart}/>
+</div>
+
+<div className="bg-white p-6 shadow rounded">
+<h2 className="text-xl font-bold mb-4">
+Complaint Status
+</h2>
+<Pie data={statusChart}/>
+</div>
+
+</div>
+
+
+{/* DEPARTMENT LOAD */}
+
+<div className="bg-white p-6 shadow rounded mb-10">
+
+<h2 className="text-xl font-bold mb-4">
+Department Complaint Load
+</h2>
+
+<Bar data={deptChart}/>
+
+</div>
+
+
+{/* TABLE */}
+
+<div className="bg-white p-6 shadow rounded">
+
+<h2 className="text-xl font-bold mb-4">
+Recent Complaints
+</h2>
+
+<table className="w-full border">
+
+<thead className="bg-gray-200">
+
+<tr>
+<th>ID</th>
+<th>Title</th>
+<th>Category</th>
+<th>Department</th>
+<th>Status</th>
+<th>Urgency</th>
+</tr>
+
+</thead>
+
+<tbody>
+
+{complaints.map((c) => (
+
+<tr key={c.id} className="text-center border">
+
+<td>{c.id}</td>
+<td>{c.title}</td>
+<td>{c.category}</td>
+<td>{c.department}</td>
+<td>{c.status}</td>
+<td>{c.urgency}</td>
+
+</tr>
+
+))}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+);
+
+}

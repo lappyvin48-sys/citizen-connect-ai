@@ -1,124 +1,363 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Brain, MapPin, Mic, Upload, Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CATEGORIES, DEPARTMENTS } from '@/lib/mockData';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { supabase } from "../supabaseClient";
 
-const SubmitComplaint = () => {
-  const [description, setDescription] = useState('');
-  const [aiAnalysis, setAiAnalysis] = useState<null | { category: string; urgency: string; sentiment: string; department: string; summary: string }>(null);
-  const [analyzing, setAnalyzing] = useState(false);
+export default function SubmitComplaint() {
 
-  const analyzeWithAI = () => {
-    if (description.length < 20) { toast.error('Please provide more detail'); return; }
-    setAnalyzing(true);
-    setTimeout(() => {
-      setAiAnalysis({
-        category: 'Infrastructure',
-        urgency: description.toLowerCase().includes('danger') || description.toLowerCase().includes('accident') ? 'Critical' : 'Medium',
-        sentiment: description.includes('!') ? 'Negative' : 'Neutral',
-        department: 'Public Works',
-        summary: description.slice(0, 100) + (description.length > 100 ? '...' : ''),
-      });
-      setAnalyzing(false);
-      toast.success('AI analysis complete!');
-    }, 1500);
-  };
+const [title,setTitle] = useState("");
+const [description,setDescription] = useState("");
+const [location,setLocation] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success('Complaint submitted! Ticket ID: GRV-2026-007');
-  };
+const [category,setCategory] = useState("");
+const [department,setDepartment] = useState("");
+const [urgency,setUrgency] = useState("Medium");
 
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="font-display text-2xl font-bold text-foreground">File a Complaint</h1>
-      <p className="mt-1 text-sm text-muted-foreground">AI will auto-classify and route your complaint</p>
+const [image,setImage] = useState<File | null>(null);
+const [loading,setLoading] = useState(false);
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-        <div>
-          <Label>Complaint Title</Label>
-          <Input placeholder="Brief title of your grievance" className="mt-1" required />
-        </div>
 
-        <div>
-          <Label>Description</Label>
-          <Textarea placeholder="Describe your issue in detail..." rows={5} className="mt-1"
-            value={description} onChange={e => setDescription(e.target.value)} required />
-          <div className="mt-2 flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={analyzeWithAI} disabled={analyzing}
-              className="gap-1.5 text-xs">
-              <Brain className="h-3.5 w-3.5" /> {analyzing ? 'Analyzing...' : 'AI Analyze'}
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs">
-              <Mic className="h-3.5 w-3.5" /> Voice Input
-            </Button>
-          </div>
-        </div>
+/* LOCATION DETECTION */
 
-        {aiAnalysis && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="rounded-xl border border-accent/30 bg-accent/5 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-              <Brain className="h-4 w-4" /> AI Analysis
-            </div>
-            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-              <div><span className="text-muted-foreground">Category:</span> <strong>{aiAnalysis.category}</strong></div>
-              <div><span className="text-muted-foreground">Urgency:</span> <strong>{aiAnalysis.urgency}</strong></div>
-              <div><span className="text-muted-foreground">Sentiment:</span> <strong>{aiAnalysis.sentiment}</strong></div>
-              <div><span className="text-muted-foreground">Route to:</span> <strong>{aiAnalysis.department}</strong></div>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground"><strong>Summary:</strong> {aiAnalysis.summary}</p>
-          </motion.div>
-        )}
+function detectLocation(){
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label>Category</Label>
-            <Select>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Auto-detected or select" /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Department</Label>
-            <Select>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Auto-routed or select" /></SelectTrigger>
-              <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
+if(!navigator.geolocation){
+alert("Geolocation not supported");
+return;
+}
 
-        <div>
-          <Label>Location</Label>
-          <div className="relative mt-1">
-            <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Address or area" className="pl-10" />
-          </div>
-        </div>
+navigator.geolocation.getCurrentPosition(
 
-        <div>
-          <Label>Attachments</Label>
-          <div className="mt-1 flex items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/50 px-4 py-8">
-            <div className="text-center">
-              <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-2 text-sm text-muted-foreground">Drop files here or click to upload</p>
-              <p className="text-xs text-muted-foreground">Images, documents, audio</p>
-            </div>
-          </div>
-        </div>
+async(position)=>{
 
-        <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90 gap-2">
-          <Send className="h-4 w-4" /> Submit Complaint
-        </Button>
-      </form>
-    </div>
-  );
-};
+const lat = position.coords.latitude;
+const lon = position.coords.longitude;
 
-export default SubmitComplaint;
+try{
+
+const response = await fetch(
+`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+);
+
+const data = await response.json();
+
+const place =
+data.address.city ||
+data.address.town ||
+data.address.village ||
+data.address.state ||
+"Unknown location";
+
+setLocation(place);
+
+}catch(err){
+console.log(err);
+setLocation(`${lat}, ${lon}`);
+}
+
+},
+
+()=>{
+alert("Unable to detect location");
+}
+
+);
+
+}
+
+
+/* AI TEXT ANALYSIS */
+
+function analyzeComplaint(){
+
+const text = (title + " " + description).toLowerCase();
+
+if(text.includes("water") || text.includes("pipe")){
+setCategory("Water");
+setDepartment("Water Department");
+}
+
+else if(text.includes("road") || text.includes("pothole")){
+setCategory("Roads");
+setDepartment("Roads Department");
+}
+
+else if(text.includes("garbage") || text.includes("trash")){
+setCategory("Sanitation");
+setDepartment("Sanitation Department");
+}
+
+else if(text.includes("electric") || text.includes("power")){
+setCategory("Electricity");
+setDepartment("Electricity Department");
+}
+
+else{
+setCategory("General");
+setDepartment("Municipal Office");
+}
+
+
+if(text.includes("urgent") || text.includes("danger")){
+setUrgency("High");
+}
+
+else if(text.includes("soon")){
+setUrgency("Medium");
+}
+
+else{
+setUrgency("Low");
+}
+
+alert("AI analysis completed");
+
+}
+
+
+/* IMAGE ANALYSIS */
+
+function analyzeImage(){
+
+if(!image){
+alert("Upload an image first");
+return;
+}
+
+const name = image.name.toLowerCase();
+
+if(name.includes("pothole") || name.includes("road")){
+setCategory("Roads");
+setDepartment("Roads Department");
+}
+
+else if(name.includes("garbage")){
+setCategory("Sanitation");
+setDepartment("Sanitation Department");
+}
+
+else if(name.includes("water")){
+setCategory("Water");
+setDepartment("Water Department");
+}
+
+else{
+alert("AI could not detect issue from image");
+}
+
+}
+
+
+/* SUBMIT COMPLAINT */
+
+async function submitComplaint(e:any){
+
+e.preventDefault();
+
+if(!title || !description || !location){
+alert("Please fill all required fields");
+return;
+}
+
+setLoading(true);
+
+let imageUrl = "";
+
+
+/* IMAGE UPLOAD */
+
+if(image){
+
+try{
+
+const fileName = Date.now() + "-" + image.name;
+
+const { error:uploadError } = await supabase
+.storage
+.from("complaint-images")
+.upload(fileName,image);
+
+if(uploadError){
+console.log("Upload error:",uploadError);
+}
+else{
+
+const { data } = supabase
+.storage
+.from("complaint-images")
+.getPublicUrl(fileName);
+
+imageUrl = data.publicUrl;
+
+}
+
+}catch(err){
+console.log("Upload failed",err);
+}
+
+}
+
+
+/* INSERT INTO DATABASE */
+
+const { error } = await supabase
+.from("complaints")
+.insert([
+{
+title,
+description,
+location,
+category,
+department,
+urgency,
+image_url:imageUrl,
+status:"Pending"
+}
+]);
+
+setLoading(false);
+
+if(error){
+
+console.log("Supabase error:",error);
+alert(error.message);
+
+}
+else{
+
+alert("Complaint submitted successfully");
+
+setTitle("");
+setDescription("");
+setLocation("");
+setCategory("");
+setDepartment("");
+setUrgency("Medium");
+setImage(null);
+
+}
+
+}
+
+
+/* UI */
+
+return(
+
+<div className="p-10 max-w-xl mx-auto">
+
+<h1 className="text-2xl font-bold mb-6">
+File a Complaint
+</h1>
+
+<form onSubmit={submitComplaint} className="space-y-4">
+
+
+<input
+type="text"
+placeholder="Complaint Title"
+value={title}
+onChange={(e)=>setTitle(e.target.value)}
+className="border p-2 w-full"
+required
+/>
+
+
+<textarea
+placeholder="Describe the issue"
+value={description}
+onChange={(e)=>setDescription(e.target.value)}
+className="border p-2 w-full"
+required
+/>
+
+
+<input
+type="text"
+placeholder="Enter location or detect"
+value={location}
+onChange={(e)=>setLocation(e.target.value)}
+className="border p-2 w-full"
+required
+/>
+
+
+<div className="flex items-center gap-3">
+
+<button
+type="button"
+onClick={detectLocation}
+className="bg-gray-700 text-white px-4 py-2 rounded"
+>
+Detect Location
+</button>
+
+<input
+type="file"
+onChange={(e)=>setImage(e.target.files?.[0] || null)}
+className="border p-2 rounded"
+/>
+
+</div>
+
+
+<button
+type="button"
+onClick={analyzeImage}
+className="bg-purple-600 text-white px-4 py-2 rounded"
+>
+AI Detect from Image
+</button>
+
+
+<button
+type="button"
+onClick={analyzeComplaint}
+className="bg-blue-600 text-white px-4 py-2 rounded"
+>
+AI Analyze Complaint
+</button>
+
+
+<input
+type="text"
+placeholder="Category"
+value={category}
+onChange={(e)=>setCategory(e.target.value)}
+className="border p-2 w-full"
+/>
+
+
+<input
+type="text"
+placeholder="Department"
+value={department}
+onChange={(e)=>setDepartment(e.target.value)}
+className="border p-2 w-full"
+/>
+
+
+<select
+value={urgency}
+onChange={(e)=>setUrgency(e.target.value)}
+className="border p-2 w-full"
+>
+<option>Low</option>
+<option>Medium</option>
+<option>High</option>
+</select>
+
+
+<button
+type="submit"
+disabled={loading}
+className="bg-green-600 text-white px-6 py-2 rounded w-full"
+>
+{loading ? "Submitting..." : "Submit Complaint"}
+</button>
+
+</form>
+
+</div>
+
+);
+
+}
